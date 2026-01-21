@@ -13,7 +13,7 @@ jobs:
     steps:
       # Step 1: Checkout repo
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       # Step 2: Set up Python
       - name: Set up Python
@@ -42,7 +42,7 @@ jobs:
 
       # Optional: upload CSV as artifact
       - name: Upload CSV
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: aqi-data
           path: aqi_data.csv
