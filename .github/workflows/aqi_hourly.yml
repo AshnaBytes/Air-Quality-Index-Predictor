@@ -1,48 +1,43 @@
-name: AQI Hourly Fetch
+name: AQI & Weather Hourly Fetch
 
-# Trigger schedule (every hour)
 on:
   schedule:
-    - cron: '0 * * * *'   # Every hour at minute 0
-  workflow_dispatch:       # Allows manual run from GitHub UI
+    - cron: "0 * * * *"   # every hour
+  workflow_dispatch:
 
 jobs:
-  fetch_aqi:
+  fetch_data:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repo
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      # Step 2: Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      # Step 3: Install dependencies
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests pandas python-dotenv
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
 
-      # Step 4: Set environment variables (your API key)
-      - name: Set env variables
-        env:
-          AQICN_API_KEY: ${{ secrets.AQICN_API_KEY }}
-          CITY: karachi
-        run: |
-          echo "AQICN_API_KEY=$AQICN_API_KEY" >> $GITHUB_ENV
-          echo "CITY=$CITY" >> $GITHUB_ENV
+    - name: Fetch AQI
+      run: python data_ingestion/fetch_aqi.py
+      env:
+        AQICN_API_KEY: ${{ secrets.AQICN_API_KEY }}
+        CITY: ${{ secrets.CITY }}
 
-      # Step 5: Run the script
-      - name: Run fetch_aqi.py
-        run: python data_ingestion/fetch_aqi.py
+    - name: Fetch Weather
+      run: python data_ingestion/fetch_weather.py
+      env:
+        OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+        CITY: ${{ secrets.CITY }}
+        LAT: ${{ secrets.LAT }}
+        LON: ${{ secrets.LON }}
 
-      # Optional: upload CSV as artifact
-      - name: Upload CSV
-        uses: actions/upload-artifact@v4
-        with:
-          name: aqi-data
-          path: aqi_data.csv
+    - name: Upload raw data
+      uses: actions/upload-artifact@v4
+      with:
+        name: raw-data
+        path: data/raw/
