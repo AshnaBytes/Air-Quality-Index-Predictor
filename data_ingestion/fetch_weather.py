@@ -11,8 +11,9 @@ CITY = os.getenv("CITY")
 LAT = os.getenv("LAT")
 LON = os.getenv("LON")
 
-DATA_DIR = "data/raw"
-FILE_PATH = f"{DATA_DIR}/weather.csv"
+OUTPUT_DIR = "data/raw"
+OUTPUT_FILE = f"{OUTPUT_DIR}/weather.csv"
+
 
 def fetch_weather():
     url = (
@@ -20,33 +21,51 @@ def fetch_weather():
         f"?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric"
     )
 
-    response = requests.get(url).json()
+    try:
+        response = requests.get(url, timeout=10).json()
+    except Exception as e:
+        print("Weather request failed:", e)
+        return None
+
+    # 1️⃣ Validate response
+    if "main" not in response:
+        print("Invalid weather response:", response)
+        return None
 
     rain = response.get("rain", {}).get("1h", 0.0)
 
     return {
         "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-        "temperature": response["main"]["temp"],
-        "humidity": response["main"]["humidity"],
-        "pressure": response["main"]["pressure"],
+        "temperature": response["main"].get("temp"),
+        "humidity": response["main"].get("humidity"),
+        "pressure": response["main"].get("pressure"),
         "visibility": response.get("visibility"),
-        "wind_speed": response["wind"]["speed"],
+        "wind_speed": response.get("wind", {}).get("speed"),
         "rain": rain,
-        "city": CITY
+        "city": CITY,
     }
 
-def append_to_csv(data):
-    os.makedirs(DATA_DIR, exist_ok=True)
 
-    file_exists = os.path.isfile(FILE_PATH)
+def append_weather_data():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    with open(FILE_PATH, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=data.keys())
+    record = fetch_weather()
+
+    # 2️⃣ Skip if no data (DO NOT FAIL)
+    if record is None:
+        print("No weather data available for this run. Skipping.")
+        return
+
+    file_exists = os.path.isfile(OUTPUT_FILE)
+
+    with open(OUTPUT_FILE, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=record.keys())
         if not file_exists:
             writer.writeheader()
-        writer.writerow(data)
+        writer.writerow(record)
+
+    print("Weather data appended successfully")
+
 
 if __name__ == "__main__":
-    weather_data = fetch_weather()
-    append_to_csv(weather_data)
-    print("Weather data appended:", weather_data)
+    append_weather_data()
