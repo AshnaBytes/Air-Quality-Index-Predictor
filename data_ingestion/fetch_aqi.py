@@ -3,24 +3,37 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
-import time
 
 load_dotenv()
 
 API_KEY = os.getenv("AQICN_API_KEY")
 CITY = os.getenv("CITY")
 
-OUTPUT_FILE = "aqi_data.csv"
+OUTPUT_DIR = "data/raw"
+OUTPUT_FILE = f"{OUTPUT_DIR}/aqi.csv"
+
 
 def fetch_current_aqi():
     url = f"https://api.waqi.info/feed/{CITY}/?token={API_KEY}"
-    response = requests.get(url).json()
 
+    try:
+        response = requests.get(url, timeout=10).json()
+    except Exception as e:
+        print("Request failed:", e)
+        return None
+
+    # 1️⃣ Check API status
     if response.get("status") != "ok":
-        raise ValueError(response.get("data"))
+        print("AQICN API status not ok:", response)
+        return None
 
-    data = response["data"]
+    data = response.get("data")
+    if not data:
+        print("AQICN returned empty data:", response)
+        return None
+
     iaqi = data.get("iaqi", {})
+    geo = data.get("city", {}).get("geo", [None, None])
 
     return {
         "timestamp": data.get("time", {}).get("s"),
@@ -31,15 +44,22 @@ def fetch_current_aqi():
         "o3": iaqi.get("o3", {}).get("v"),
         "so2": iaqi.get("so2", {}).get("v"),
         "dominant_pollutant": data.get("dominentpol"),
-        "lat": data.get("city", {}).get("geo", [None, None])[0],
-        "lon": data.get("city", {}).get("geo", [None, None])[1],
-        "city": CITY
+        "lat": geo[0],
+        "lon": geo[1],
+        "city": CITY,
     }
 
+
 def append_aqi_data():
-    os.makedirs("data", exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     record = fetch_current_aqi()
+
+    # 2️⃣ If no data, DO NOT FAIL PIPELINE
+    if record is None:
+        print("No AQI data available for this run. Skipping.")
+        return
+
     df_new = pd.DataFrame([record])
 
     if os.path.exists(OUTPUT_FILE):
@@ -48,9 +68,12 @@ def append_aqi_data():
     else:
         df = df_new
 
+    # 3️⃣ Avoid duplicates
     df.drop_duplicates(subset=["timestamp"], inplace=True)
+
     df.to_csv(OUTPUT_FILE, index=False)
-    print("AQI data appended")
+    print("AQI data appended successfully")
+
 
 if __name__ == "__main__":
     append_aqi_data()
